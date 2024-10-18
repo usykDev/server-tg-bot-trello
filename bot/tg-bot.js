@@ -1,33 +1,51 @@
 import TelegramBot from "node-telegram-bot-api";
-import { saveUserToDb, userExists, getGroupChatId } from "../db/user.js"; // Ensure this path is correct
+import { saveUserToDb, userExists } from "../db/user.js"; 
 import "dotenv/config";
 
-// Create a new Telegram bot instance
+// Creation of a new Telegram bot instance
 const bot = new TelegramBot(process.env.TOKEN, { polling: false });
 
-// Set the webhook for the Telegram bot
+// Setting the webhook for the Telegram bot
 const webhookUrl = `${process.env.URL}/bot${process.env.TOKEN}`;
 bot.setWebHook(webhookUrl);
 
-export const handleTelegramUpdate = (update) => {
+export const handleTelegramUpdate = async (update) => {
   const msg = update.message;
-  if (!msg) return; // Ignore non-message updates
+  console.log(msg);
+  if (!msg) return; 
 
   const chatId = msg.chat.id;
   const telegramId = msg.from.id;
   const firstName = msg.from.first_name;
+  const boardId = process.env.TRELLO_BOARD_ID;
 
-  userExists(telegramId, (err, exists) => {
-    if (err) {
+  if (msg.text === "/start") {
+    try {
+      // Check if the user exists in the database
+      const exists = await userExists(telegramId);
+
+      if (!exists) {
+        // Save the new user to the database
+        await saveUserToDb(firstName, chatId, telegramId, boardId);
+        bot.sendMessage(
+          chatId,
+          `Hi, ${firstName}! Your account has been added to the database.`
+        );
+      } else {
+        bot.sendMessage(
+          chatId,
+          `Hi, ${firstName}! You are already in the database.`
+        );
+      }
+    } catch (err) {
+      console.error("An error occurred while checking the database:", err);
       bot.sendMessage(chatId, "An error occurred while checking the database.");
-      return;
     }
+  }
 
-    if (!exists) {
-      saveUserToDb(firstName, chatId);
-      bot.sendMessage(chatId, "Your name has been added to the database.");
-    } else {
-      bot.sendMessage(chatId, "You are already in the database.");
-    }
-  });
+  if (msg.text === "/id") {
+    bot.sendMessage(chatId, `This chat's ID is: ${chatId}`);
+  }
 };
+
+export { bot };

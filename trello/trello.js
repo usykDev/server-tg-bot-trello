@@ -1,11 +1,13 @@
 import axios from "axios";
+import "dotenv/config";
+import { getChatIdByTelegramId } from "../db/user.js";
+import { bot } from "../bot/tg-bot.js";
 
-export const handleTrelloWebhook = (action, res) => {
+export const handleTrelloWebhook = async (action, res) => {
   try {
     if (action) {
       console.log("Webhook action received:", action.type);
 
-      // Check if the action type is 'createList'
       if (action.type === "createList") {
         const listName = action.data.list.name;
         const listId = action.data.list.id;
@@ -18,23 +20,40 @@ export const handleTrelloWebhook = (action, res) => {
         action.data.listAfter
       ) {
         const cardName = action.data.card.name;
-        //   const cardId = action.data.card.id;
         const listBefore = action.data.listBefore.name;
         const listAfter = action.data.listAfter.name;
+        const boardId = process.env.TRELLO_BOARD_ID;
 
+        try {
+          const chatIds = await getChatIdByTelegramId(boardId);
+          console.log(chatIds);
+
+          const allIds = [...chatIds, Number(process.env.TG_GROUP_ID)];
+          console.log(allIds);
+
+          if (allIds.length > 0) {
+            allIds.forEach((chatId) => {
+              bot.sendMessage(
+                chatId,
+                `Card "${cardName}" was moved from "${listBefore}" to "${listAfter}" List.`
+              );
+            });
+          } else {
+            console.log("No chat_id found for this boardId.");
+          }
+        } catch (err) {
+          console.error("Failed to retrieve chat_id:", err);
+        }
         console.log(
           `Card "${cardName}" was moved from "${listBefore}" to "${listAfter} List".`
         );
       }
     }
 
-    // Respond to Trello with a 200 OK status
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("OK");
   } catch (err) {
     console.error("Error parsing webhook data:", err);
-
-    // Respond with a 400 Bad Request if JSON parsing fails
     res.writeHead(400, { "Content-Type": "text/plain" });
     res.end("Invalid JSON data");
   }
@@ -48,46 +67,44 @@ export const setTrelloWebhook = async () => {
 
   //   deleteAllTrelloWebhooks();
 
-  // Get existing webhooks first
   const existingWebhooks = await getTrelloWebhooks();
 
-  // Check if a webhook for the specific idModel and callbackURL already exists
+  // Checking if a webhook for the specific idModel and callbackURL already exists
   const webhookExists = existingWebhooks.some(
     (webhook) =>
       webhook.idModel === boardId && webhook.callbackURL === callbackURL
   );
-
   if (webhookExists) {
     console.log("A webhook for this board and callback URL already exists.");
     return;
-  }
+  } else {
+    try {
+      const response = await axios.post(
+        "https://api.trello.com/1/webhooks/",
+        null,
+        {
+          params: {
+            key: apiKey,
+            token: apiToken,
+            callbackURL: callbackURL,
+            idModel: boardId,
+          },
+        }
+      );
 
-  try {
-    const response = await axios.post(
-      "https://api.trello.com/1/webhooks/",
-      null,
-      {
-        params: {
-          key: apiKey,
-          token: apiToken,
-          callbackURL: callbackURL,
-          idModel: boardId,
-        },
-      }
-    );
-
-    console.log("Webhook set up successfully:", response.data);
-  } catch (error) {
-    console.error(
-      "Error setting up Trello webhook:",
-      error.response ? error.response.data : error.message
-    );
+      console.log("Webhook set up successfully:", response.data);
+    } catch (error) {
+      console.error(
+        "Error setting up Trello webhook:",
+        error.response ? error.response.data : error.message
+      );
+    }
   }
 };
 
 export const getTrelloWebhooks = async () => {
-  const apiKey = process.env.TRELLO_API_KEY; // Your Trello API key
-  const apiToken = process.env.TRELLO_TOKEN; // Your Trello API token
+  const apiKey = process.env.TRELLO_API_KEY;
+  const apiToken = process.env.TRELLO_TOKEN;
 
   try {
     const response = await axios.get(
@@ -106,16 +123,14 @@ export const getTrelloWebhooks = async () => {
       "Error retrieving Trello webhooks:",
       error.response ? error.response.data : error.message
     );
-    // return [];
   }
 };
 
 export const deleteAllTrelloWebhooks = async () => {
-  const apiKey = process.env.TRELLO_API_KEY; // Your Trello API key
-  const apiToken = process.env.TRELLO_TOKEN; // Your Trello API token
+  const apiKey = process.env.TRELLO_API_KEY;
+  const apiToken = process.env.TRELLO_TOKEN;
 
   try {
-    // Step 1: Retrieve all webhooks
     const response = await axios.get(
       `https://api.trello.com/1/tokens/${apiToken}/webhooks`,
       {
@@ -123,15 +138,14 @@ export const deleteAllTrelloWebhooks = async () => {
       }
     );
 
-    const webhooks = response.data; // Get the webhooks data
+    const webhooks = response.data; // Getting the webhooks data
 
-    // Check if there are webhooks to delete
     if (webhooks.length === 0) {
       console.log("No webhooks found to delete.");
       return;
     }
 
-    // Step 2: Loop through and delete each webhook
+    // Looping through and delete each webhook
     for (const webhook of webhooks) {
       const webhookId = webhook.id;
       await axios.delete(`https://api.trello.com/1/webhooks/${webhookId}`, {
@@ -145,7 +159,6 @@ export const deleteAllTrelloWebhooks = async () => {
 
     console.log("All webhooks deleted successfully.");
   } catch (error) {
-    // Improved error logging
     if (error.response) {
       console.error(
         "Error retrieving or deleting Trello webhooks:",
