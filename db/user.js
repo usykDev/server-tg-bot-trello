@@ -5,7 +5,7 @@ export const userExists = async (telegramId) => {
   const query = `SELECT 
                    COUNT(*) AS count
                  FROM users 
-                 WHERE chat_id = ?`;
+                 WHERE telegram_id = ?`;
 
   try {
     const [results] = await db.query(query, [telegramId]);
