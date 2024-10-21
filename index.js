@@ -1,14 +1,10 @@
 import http from "http"; // built-in HTTP module
 import "dotenv/config";
-import {
-  handleTrelloWebhook,
-  setTrelloWebhook,
-} from "./trello/trello.js";
+import { handleTrelloWebhook, setTrelloWebhook } from "./trello/trello.js";
 
 import { handleTelegramUpdate } from "./bot/tg-bot.js";
 
 const server = http.createServer((req, res) => {
-
   // Handling Telegram webhook
   if (req.url.startsWith(`/bot${process.env.TOKEN}`)) {
     // Parsing incoming updates from Telegram
@@ -28,14 +24,14 @@ const server = http.createServer((req, res) => {
       body += chunk.toString(); // Converting Buffer to string
     });
     req.on("end", () => {
-    //   console.log("Received request:", req.method, req.url);
+      //   console.log("Received request:", req.method, req.url);
       if (req.method === "HEAD") {
         console.log(body);
-        res.writeHead(200); 
+        res.writeHead(200);
         res.end();
         return;
       } else if (req.method === "POST") {
-        const webhookData = JSON.parse(body); 
+        const webhookData = JSON.parse(body);
         const action = webhookData && webhookData.action; // Extracting the action from the webhook payload
 
         handleTrelloWebhook(action, res);

@@ -1,6 +1,10 @@
 import axios from "axios";
 import "dotenv/config";
-import { getChatIdByTelegramId } from "../db/user.js";
+import {
+  addTrelloIdToDB,
+  getChatIdByTelegramId,
+  getChatIdByTrelloUserName,
+} from "../db/user.js";
 import { bot } from "../bot/tg-bot.js";
 
 export const handleTrelloWebhook = async (action, res) => {
@@ -47,6 +51,52 @@ export const handleTrelloWebhook = async (action, res) => {
         console.log(
           `Card "${cardName}" was moved from "${listBefore}" to "${listAfter} List".`
         );
+      }
+
+      if (action && action.type === "addMemberToBoard") {
+        console.log(action.member);
+        const trelloUserId = action.member.id;
+        const trelloUserName = `@${action.member.username}`;
+
+        try {
+          await addTrelloIdToDB(trelloUserId, trelloUserName);
+
+          const chatIds = await getChatIdByTrelloUserName(trelloUserName);
+          console.log(chatIds);
+
+          if (chatIds.length > 0) {
+            for (const chatId of chatIds) {
+              if (chatId > 0) {
+                await bot.sendMessage(
+                  chatId,
+                  "Congratulations! You have joined Maryna's Trello board!"
+                );
+                await bot.sendMessage(
+                  chatId,
+                  "You can press the REPORT button to check tasks.",
+                  {
+                    reply_markup: {
+                      inline_keyboard: [
+                        [
+                          {
+                            text: "REPORT",
+                            callback_data: "report",
+                          },
+                        ],
+                      ],
+                    },
+                  }
+                );
+              }
+            }
+          } else {
+            console.log("No chat_id found for this boardId.");
+          }
+        } catch (error) {
+          console.log(error);
+        }
+
+        console.log(`Linked ${trelloUserName} with Trello ID ${trelloUserId}.`);
       }
     }
 
